@@ -19,10 +19,12 @@ use PDL::PP (qw(PDL::Fit::ExpRate PDL::Fit::ExpRate), $base_name);
 # as a string from the actual module:
 use Module::Build;
 my $build = Module::Build->current;
-pp_setversion('"' . $build->dist_version . '"');
 
 # Add the .xs file to the cleanup lists:
 $build->add_to_cleanup("$base_name.xs");
+
+our $VERSION = 0.01;
+pp_setversion($VERSION);
 
 pp_addpm <<'DOCUMENTATION';
 
@@ -760,10 +762,13 @@ L<PDL::Fit::LM> provides Levenberg-Marquardt fitting, and
 L<PDL::Fit::Gaussian> provides methods for fitting a set of data to a
 normal (Gaussian) distribution.
 
+=head1 AUTHOR
+
+David Mertens <dcmertens.perl@gmail.com>
+
 =head1 LICENCE AND COPYRIGHT
 
-Documentation is copyright (c) 2012, David Mertens
-C<dcmertens.perl@gmail.com>, all rights reserved.
+Documentation is copyright (c) 2012, David Mertens, all rights reserved.
 
 Code is copyright (c) 2012, Northwestern University, all rights reserved.
 

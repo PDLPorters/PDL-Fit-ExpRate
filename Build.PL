@@ -6,11 +6,11 @@ use PDL::Core::Dev;
 my $inc = PDL_INCLUDE;
 $inc =~ s/^-I//;
 
-my $version = '0.01';
+#my $version = '0.01';
 
 my $build = Module::Build->new(
 	module_name => 'PDL::Fit::ExpRate',
-	dist_version => $version,
+	dist_version_from => 'lib/PDL/Fit/ExpRate.pm.PL',
 	license  => 'perl',
 	requires => {
 		perl					=> '5.6.1',
