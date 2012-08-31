@@ -7,3 +7,4 @@ MANIFEST.*
 lib/PDL/Fit/ExpRate.pm
 _Inline
 blib
+.prima.repl.history
