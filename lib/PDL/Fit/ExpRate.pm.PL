@@ -24,6 +24,82 @@ pp_setversion('"' . $build->dist_version . '"');
 # Add the .xs file to the cleanup lists:
 $build->add_to_cleanup("$base_name.xs");
 
+pp_addpm <<'DOCUMENTATION';
+
+=head1 NAME
+
+PDL::Fit::ExpRate - fitting noisy exponential decay
+
+=head1 VERSION
+
+This document describes PDL::Fit::ExpRate version 0.01
+
+=head1 SYNOPSIS
+
+ use PDL;
+ use PDL::Fit::ExpRate;
+ 
+ # Load x/y data, or generate some noisy stuff:
+ my $xs = sequence(100)/10;
+ my ($A, $B, $tau) = (5, 4, -10);
+ my $ys = $A + $B * exp($xs / $tau) + $xs->grandom;
+ 
+ # Extract the parameters
+ my ($fit_A, $fit_b, $fit_tau) = fit_exp_rate($xs, $ys);
+ 
+ print "A was $A; fit as $fit_A\n";
+ print "B was $B; fit as $fit_B\n";
+ print "tau was $tau; fit as $fit_tau\n";
+ 
+ # Other useful functions
+ 
+ # Solve for $coefs in $A * $coefs = $y
+ # where $A is 3x3
+ my $A = pdl q[1 0 0 ; 0 2 0 ; 0 0 3];
+ my $y = pdl q[5     ,   -4  ,     6];
+ my $coefs = three_by_three_Householder($A, $y);
+ 
+ # Perform a quadratic fit
+ # y = coefs[0] + coefs[1] * x + coefs[2] * x**2
+ my $coefs = fit_quadratic($xs, $ys);
+ 
+ # and more yet to be documented...
+
+=head1 DESCRIPTION
+
+This module provides a handy function for fitting time series data to a
+single exponential growth or decay. A number of methods used by this method
+are also made available, including a method for fitting data to a
+second-order polynomial, and performing Householder diagonalization on
+3x3 matrix systems, and various parameter estimation and single-step functions.
+
+The naive approach to fitting data to an exponential decay involves taking
+the logarithm of the y-values and fitting the resulting transformed data to
+a line. This has a number of drawbacks. First, it leads to a bias in the
+errors: errors in the data associated with smaller y-values receive a
+stronger weight than those associated with larger y-values. Second, there is
+no simple way to handle an additive offset such as A in C<y = A + B * e**(x/tau)>.
+Third and most important, the transformation technique breaks down if the
+noise leads to any data values that are negative. The only simple way to
+handle such data is to discard it. An approach involving a logarithmic
+transformation is biased and can only be used under limited circumstances.
+
+The fitting method supplied by this module, L</fit_exp_rate>, takes a
+different and much more robust approach that does not suffer any of those
+errors. It performs a least-squares fit to an exponential directly to the
+data using an iterative guarded Newton method. The technique gives accurate
+results, is highly configurable, and converges rapidly. As an added bonus,
+the underlying C functions can be accessed by other PDL modules using
+L<PDL::PP::Include::Fit::ExpRate>.
+
+=cut
+
+DOCUMENTATION
+
+=head2 FUNCTIONS
+
+=cut
+
 #################################
 # 3x3 Household diagonalization #
 #################################
@@ -672,4 +748,28 @@ pp_add_boot pp_line_numbers(__LINE__, q{
     sv_setiv(address_sv, PTR2IV(&_exp_fit_newton_method_step));
 });
 
+pp_addpm <<'DOCUMENTATION';
 
+=head1 SEE ALSO
+
+There are a number of PDL modules for fitting data, including
+L<PDL::Fit::Linfit> for linear fitting and L<PDL::Fit::Polynomial> for
+fitting data to polynomials. Both of those modules depend on Slatec (though
+they may be installed on your system even if you don't have Slatec available).
+L<PDL::Fit::LM> provides Levenberg-Marquardt fitting, and
+L<PDL::Fit::Gaussian> provides methods for fitting a set of data to a
+normal (Gaussian) distribution.
+
+=head1 LICENCE AND COPYRIGHT
+
+Documentation is copyright (c) 2012, David Mertens
+C<dcmertens.perl@gmail.com>, all rights reserved.
+
+Code is copyright (c) 2012, Northwestern University, all rights reserved.
+
+This module is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself. See L<perlartistic>.
+
+=cut
+
+DOCUMENTATION
