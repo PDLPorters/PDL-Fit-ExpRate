@@ -1,0 +1,7 @@
+Build
+_build
+MANIFEST.*
+*.xs
+*.o
+*.c
+lib/PDL/Fit/ExpRate.pm
