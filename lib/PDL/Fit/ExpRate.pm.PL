@@ -172,7 +172,7 @@ pp_def('three_by_three_Householder',
 # Uses the 3x3 Householder
 
 pp_addhdr pp_line_numbers(__LINE__, q{
-	void _quadratic_fit (double * xs, double * ys, int N_points, double * coefs) {
+	void _fit_quadratic (double * xs, double * ys, int N_points, double * coefs) {
 		double A[3][3];
 		double y[3];
 		int i, n, m;
@@ -209,11 +209,39 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 	}
 });
 
+=head2 fit_quadratic
+
+=cut
+
+$documentation = <<'DOCUMENTATION';
+
+=for ref
+
+Given x and y data, determines A, B, and C for y = A + B x + C x**2
+
+This function determines the least-squares coefficients for a quadratic fit
+to a given set of x-y data. This is a simple PDL wrapper for the internal
+C function C<exprate_fit_quadratic>. This usage is pretty simple:
+
+=for example
+
+ # Make some noisy data
+ my $xs = sequence(50);
+ my $ys = 5 + 3 * $x + 4 * $x**2 + grandom($xs);
+ 
+ # should be (5, 3, 4)
+ my $coefs = fit_quadratic($xs, $ys);
+
+=cut
+
+DOCUMENTATION
+
 pp_def('fit_quadratic',
 	Pars => 'xs(n); ys(n); [o] coefs(m=3)',
 	GenericTypes => ['D'],
+	Doc => $documentation,
 	Code => pp_line_numbers(__LINE__, q{
-		_quadratic_fit($P(xs), $P(ys), $SIZE(n), $P(coefs));
+		_fit_quadratic($P(xs), $P(ys), $SIZE(n), $P(coefs));
 	}),
 );
 
@@ -247,7 +275,7 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 		double * A, double * B, double * lambda, double * sum_sq_error
 	) {
 		double coefs[3];
-		_quadratic_fit(xs, ys, length, coefs);
+		_fit_quadratic(xs, ys, length, coefs);
 		
 		*lambda = 2 * coefs[2] / coefs[1];
 		*B = coefs[1] / (*lambda);
@@ -648,7 +676,7 @@ pp_add_boot pp_line_numbers(__LINE__, q{
     
     /* quadratic fit */
     address_sv = get_sv("PDL::Fit::ExpRate::__quadratic_func_addr", GV_ADD);
-    sv_setiv(address_sv, PTR2IV(&_quadratic_fit));
+    sv_setiv(address_sv, PTR2IV(&_fit_quadratic));
     
     /* exponential error accumulator */
     address_sv = get_sv("PDL::Fit::ExpRate::__accum_func_addr", GV_ADD);
