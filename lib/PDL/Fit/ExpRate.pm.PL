@@ -1,8 +1,6 @@
 use strict;
 use warnings;
 
-# TODO: build a test for the single exponential fit iteration
-
 # Invoke PDL::PP
 my $base_name;
 BEGIN {
@@ -403,6 +401,85 @@ pp_def('exp_fit_newton_method_step' =>
 # threshold => floating point; pct-diff for old and new score as stop condition
 #              (default is 0.001)
 
+
+################################
+# Code to handle the callbacks #
+################################
+# I've broken these out into #defines because I wanted to clarify the
+# actual fit_exp_rate code, and to avoid code duplication on
+# PER_ITERATION_CALLBACK
+pp_addhdr pp_line_numbers(__LINE__, q{
+	#define DO_ITERATION_CALLBACK do { \
+		dSP; \
+		ENTER; \
+		SAVETMPS; \
+		\
+		PUSHMARK(SP); \
+		EXTEND(SP, 14); \
+		PUSHs(sv_2mortal(newSVpv("A", 1))); \
+		PUSHs(sv_2mortal(newSVnv(A))); \
+		PUSHs(sv_2mortal(newSVpv("B", 1))); \
+		PUSHs(sv_2mortal(newSVnv(B))); \
+		PUSHs(sv_2mortal(newSVpv("lambda", 6))); \
+		PUSHs(sv_2mortal(newSVnv(lambda))); \
+		PUSHs(sv_2mortal(newSVpv("round", 5))); \
+		PUSHs(sv_2mortal(newSViv(counter))); \
+		PUSHs(sv_2mortal(newSVpv("sum_sq_err", 10))); \
+		PUSHs(sv_2mortal(newSVnv(sum_sq_error))); \
+		PUSHs(sv_2mortal(newSVpv("old_sum_sq_err", 14))); \
+		PUSHs(sv_2mortal(newSVnv(old_sum_sq_error))); \
+		PUSHs(sv_2mortal(newSVpv("threshold", 9))); \
+		PUSHs(sv_2mortal(newSVnv(threshold))); \
+		if (force_next_round) { \
+			XPUSHs(sv_2mortal(newSVpv("forced_round", 12))); \
+			XPUSHs(sv_2mortal(newSViv(force_next_round))); \
+		} \
+		PUTBACK; \
+		\
+		call_sv(*per_iteration_code_ref_p, G_DISCARD); \
+		\
+		FREETMPS; \
+		LEAVE; \
+	} while (0)
+	
+	#define DO_FIT_CALLBACK do { \
+		dSP; \
+		ENTER; \
+		SAVETMPS; \
+		\
+		PUSHMARK(SP); \
+		EXTEND(SP, 12); \
+		PUSHs(sv_2mortal(newSVpv("fit_count", 9))); \
+		PUSHs(sv_2mortal(newSViv(total_count))); \
+		PUSHs(sv_2mortal(newSVpv("N_fits", 6))); \
+		PUSHs(sv_2mortal(newSViv(total_expected))); \
+		PUSHs(sv_2mortal(newSVpv("sum_sq_err", 10))); \
+		PUSHs(sv_2mortal(newSVnv(sum_sq_error))); \
+		PUSHs(sv_2mortal(newSVpv("old_sum_sq_err", 14))); \
+		PUSHs(sv_2mortal(newSVnv(old_sum_sq_error))); \
+		PUSHs(sv_2mortal(newSVpv("threshold", 9))); \
+		PUSHs(sv_2mortal(newSVnv(threshold))); \
+		PUSHs(sv_2mortal(newSVpv("N_rounds", 8))); \
+		PUSHs(sv_2mortal(newSViv(counter))); \
+		PUTBACK; \
+		\
+		callback_return = call_sv(*per_fit_code_ref_p, G_SCALAR); \
+		\
+		SPAGAIN; \
+		\
+		if (callback_return != 1) croak ("How did I get more than one arg returned?"); \
+		\
+		/* See if they want to quit early */ \
+		callback_return = POPi; \
+		if (callback_return == 0) goto QUIT; \
+		\
+		PUTBACK; \
+		FREETMPS; \
+		LEAVE; \
+	} while (0)
+});
+
+
 #############################################
 # The main all-encompasing fitting function #
 #############################################
@@ -507,6 +584,10 @@ pp_def('fit_exp_rate',
 		SV ** threshold_p = hv_fetchs(options_hv, "threshold", 0);
 		double threshold = threshold_p ? SvNV(*threshold_p) : 0.001;
 		
+		/**************/
+		/* Threadloop */
+		/**************/
+		
 		threadloop %{
 			total_count++;
 			
@@ -514,13 +595,13 @@ pp_def('fit_exp_rate',
 			_exp_fit_estimate_parameters($P(xs), $P(ys), $SIZE(n), 
 				&A, &B, &lambda, &sum_sq_error);
 			
-			/**************************************************/
-			/* Iterative Newton method to best-fit parameters */
-			/**************************************************/
-			
 			/* Make sure we enter the loop */
 			force_next_round = 1;
 			counter = 0;
+			
+			/**************************************************/
+			/* Iterative Newton method to best-fit parameters */
+			/**************************************************/
 			
 			while(
 				force_next_round || 
@@ -529,46 +610,10 @@ pp_def('fit_exp_rate',
 				counter++;
 				if (counter > max_iterations) break;
 				
-				/**************************/
 				/* Per-iteration callback */
-				/**************************/
+				if (per_iteration_code_ref_p != NULL) DO_ITERATION_CALLBACK;
 				
-				if (per_iteration_code_ref_p != NULL) {
-					dSP;
-					ENTER;
-					SAVETMPS;
-					
-					PUSHMARK(SP);
-					EXTEND(SP, 14);
-					PUSHs(sv_2mortal(newSVpv("A", 1)));
-					PUSHs(sv_2mortal(newSVnv(A)));
-					PUSHs(sv_2mortal(newSVpv("B", 1)));
-					PUSHs(sv_2mortal(newSVnv(B)));
-					PUSHs(sv_2mortal(newSVpv("lambda", 6)));
-					PUSHs(sv_2mortal(newSVnv(lambda)));
-					PUSHs(sv_2mortal(newSVpv("round", 5)));
-					PUSHs(sv_2mortal(newSViv(counter)));
-					PUSHs(sv_2mortal(newSVpv("sum_sq_err", 10)));
-					PUSHs(sv_2mortal(newSVnv(sum_sq_error)));
-					PUSHs(sv_2mortal(newSVpv("old_sum_sq_err", 14)));
-					PUSHs(sv_2mortal(newSVnv(old_sum_sq_error)));
-					PUSHs(sv_2mortal(newSVpv("threshold", 9)));
-					PUSHs(sv_2mortal(newSVnv(threshold)));
-					if (force_next_round) {
-						XPUSHs(sv_2mortal(newSVpv("forced_round", 12)));
-						XPUSHs(sv_2mortal(newSViv(force_next_round)));
-					}
-					PUTBACK;
-					
-					call_sv(*per_iteration_code_ref_p, G_DISCARD);
-					
-					FREETMPS;
-					LEAVE;
-				}
-				
-				/***************************/
 				/* Call the single stepper */
-				/***************************/
 				old_sum_sq_error = sum_sq_error;
 				force_next_round = _exp_fit_newton_method_step(
 					$P(xs), $P(ys), $SIZE(n), trust_radius,
@@ -576,84 +621,20 @@ pp_def('fit_exp_rate',
 			}
 
 
-			/********************************/
 			/* Final per-iteration callback */
+			if (per_iteration_code_ref_p != NULL) DO_ITERATION_CALLBACK;
+
+			/********************************/
+			/* Store the final coefficients */
 			/********************************/
 			
-			if (per_iteration_code_ref_p != NULL) {
-				dSP;
-				ENTER;
-				SAVETMPS;
-				
-				PUSHMARK(SP);
-				EXTEND(SP, 14);
-				PUSHs(sv_2mortal(newSVpv("A", 1)));
-				PUSHs(sv_2mortal(newSVnv(A)));
-				PUSHs(sv_2mortal(newSVpv("B", 1)));
-				PUSHs(sv_2mortal(newSVnv(B)));
-				PUSHs(sv_2mortal(newSVpv("lambda", 6)));
-				PUSHs(sv_2mortal(newSVnv(lambda)));
-				PUSHs(sv_2mortal(newSVpv("round", 5)));
-				PUSHs(sv_2mortal(newSViv(++counter)));
-				PUSHs(sv_2mortal(newSVpv("sum_sq_err", 10)));
-				PUSHs(sv_2mortal(newSVnv(sum_sq_error)));
-				PUSHs(sv_2mortal(newSVpv("old_sum_sq_err", 14)));
-				PUSHs(sv_2mortal(newSVnv(old_sum_sq_error)));
-				PUSHs(sv_2mortal(newSVpv("threshold", 9)));
-				PUSHs(sv_2mortal(newSVnv(threshold)));
-				PUTBACK;
-				
-				call_sv(*per_iteration_code_ref_p, G_DISCARD);
-				
-				FREETMPS;
-				LEAVE;
-			}
-
-			/* Store the final coefficients */
 			$As() = A;
 			$Bs() = B;
 			$taus() = 1/lambda;
 			$is_bad() = 0;
 			
-			/********************/
 			/* Per-fit callback */
-			/********************/
-			
-			if (per_fit_code_ref_p != NULL) {
-				dSP;
-				ENTER;
-				SAVETMPS;
-				
-				PUSHMARK(SP);
-				EXTEND(SP, 12);
-				PUSHs(sv_2mortal(newSVpv("fit_count", 9)));
-				PUSHs(sv_2mortal(newSViv(total_count)));
-				PUSHs(sv_2mortal(newSVpv("N_fits", 6)));
-				PUSHs(sv_2mortal(newSViv(total_expected)));
-				PUSHs(sv_2mortal(newSVpv("sum_sq_err", 10)));
-				PUSHs(sv_2mortal(newSVnv(sum_sq_error)));
-				PUSHs(sv_2mortal(newSVpv("old_sum_sq_err", 14)));
-				PUSHs(sv_2mortal(newSVnv(old_sum_sq_error)));
-				PUSHs(sv_2mortal(newSVpv("threshold", 9)));
-				PUSHs(sv_2mortal(newSVnv(threshold)));
-				PUSHs(sv_2mortal(newSVpv("N_rounds", 8)));
-				PUSHs(sv_2mortal(newSViv(counter)));
-				PUTBACK;
-				
-				callback_return = call_sv(*per_fit_code_ref_p, G_SCALAR);
-				
-				SPAGAIN;
-				
-				if (callback_return != 1) croak ("How did I get more than one arg returned?");
-				
-				/* See if they want to quit early */
-				callback_return = POPi;
-				if (callback_return == 0) goto QUIT;
-				
-				PUTBACK;
-				FREETMPS;
-				LEAVE;
-			}
+			if (per_fit_code_ref_p != NULL) DO_FIT_CALLBACK;
 		%}
 	
 	QUIT: residual++;
