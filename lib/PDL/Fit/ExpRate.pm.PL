@@ -105,9 +105,45 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 	}
 });
 
+=head2 three_by_three_Householder
+
+=cut
+
+my $documentation = <<'DOCUMENTATION';
+
+=for ref
+
+Given A and y, solves A * coef = y
+
+This function performs Householder diagonalization on a 3x3 matrix A with
+the given "answer" y. It effectively inverts the matrix, leading to a
+solution for coef that can be effectively written as:
+
+ coef = A**-1 * y
+
+where A**-1 is the matrix inverse of A and multiplication is matrix
+multiplication.
+
+Here's an exampe of how to use it. I've deliberately made the A matrix
+simple so that you can perform the inversion in your head, but A need not
+be sparse.
+
+=for example
+
+ my $A = pdl q[1 0 0 ; 0 2 0 ; 0 0 3];
+ my $y = pdl q[5     ,   -4  ,     6];
+ my $coefs = three_by_three_Householder($A, $y);
+ my $expected = pdl(5, -2, 2);
+ print "Got $coefs; expected $expected\n";
+
+=cut
+
+DOCUMENTATION
+
 pp_def('three_by_three_Householder',
 	Pars => 'A(n=3,m=3); y(n=3); [o] coef(n=3)',
 	GenericTypes => ['D'],
+	Doc => $documentation,
 	Code => pp_line_numbers(__LINE__, q{
 		double tmp_A [3][3];
 		double tmp_y [3];
@@ -344,7 +380,7 @@ pp_def('exp_fit_newton_method_step' =>
 #############################################
 
 pp_def('fit_exp_rate',
-	Pars => 'xs(n); ys(n); [o] As(); [o] Bs(); [o] taus(); int [o] is_good()',
+	Pars => 'xs(n); ys(n); [o] As(); [o] Bs(); [o] taus(); int [o] is_bad()',
 	GenericTypes => ['D'],
 	OtherPars => 'SV * options_sv',
 	PMCode => pp_line_numbers(__LINE__, q{
@@ -608,22 +644,22 @@ pp_add_boot pp_line_numbers(__LINE__, q{
     
     /* householder */
     SV * address_sv = get_sv("PDL::Fit::ExpRate::__householder_func_addr", GV_ADD);
-    sv_setiv(address_sv, PTR2IV(&_three_by_three_householder));
+    sv_setiv(address_sv, PTR2IV(&_three_by_three_Householder));
     
     /* quadratic fit */
-    addres_sv = get_sv("PDL::Fit::ExpRate::__quadratic_func_addr", GV_ADD);
+    address_sv = get_sv("PDL::Fit::ExpRate::__quadratic_func_addr", GV_ADD);
     sv_setiv(address_sv, PTR2IV(&_quadratic_fit));
     
     /* exponential error accumulator */
-    addres_sv = get_sv("PDL::Fit::ExpRate::__accum_func_addr", GV_ADD);
+    address_sv = get_sv("PDL::Fit::ExpRate::__accum_func_addr", GV_ADD);
     sv_setiv(address_sv, PTR2IV(&accum_exp_fit_sum_sq_err));
     
     /* parameter estimator */
-    addres_sv = get_sv("PDL::Fit::ExpRate::__estimate_func_addr", GV_ADD);
+    address_sv = get_sv("PDL::Fit::ExpRate::__estimate_func_addr", GV_ADD);
     sv_setiv(address_sv, PTR2IV(&_exp_fit_estimate_parameters));
     
     /* newton step */
-    addres_sv = get_sv("PDL::Fit::ExpRate::__newton_func_addr", GV_ADD);
+    address_sv = get_sv("PDL::Fit::ExpRate::__newton_func_addr", GV_ADD);
     sv_setiv(address_sv, PTR2IV(&_exp_fit_newton_method_step));
 });
 

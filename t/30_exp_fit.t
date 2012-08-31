@@ -19,7 +19,7 @@ ok(all (approx($coefs, $expected, 1e-2)), 'Super-simple exponential fitting work
 	or diag("Got $coefs but expected $expected");
 
 $xs = sequence(30000);
-my $tau = -1e7;
+my $tau = -1e5;
 $ys = 150 + 10 * exp($xs / $tau);
 ($As, $Bs, $taus) = fit_exp_rate($xs, $ys
 	, threshold => 0.0001

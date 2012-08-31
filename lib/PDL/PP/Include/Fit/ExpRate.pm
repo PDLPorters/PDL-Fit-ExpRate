@@ -74,7 +74,7 @@ sub import {
 #############################
 # Add the function pointers #
 #############################
-pp_addhdr q{
+PDL::PP::pp_addhdr q{
     void (*exprate_three_by_three_Householder) (double A[3][3], double y[3], double x[3]);
     void (*exprate_quadratic_fit) (double *, double *, int, double *);
     double (*exprate_accum_sum_sq_err) (double *, double *, int, double, double, double);
@@ -82,40 +82,28 @@ pp_addhdr q{
     int (*exprate_newton_method_step) (double *, double *, int, double, double *, double *, double *, double *);
 };
 
-
 ##############################################
 # XS code that assigns the function pointers #
 ##############################################
-pp_addxs <<XSCODE;
+PDL::PP::pp_add_boot PDL::PP::pp_line_numbers(__LINE__, q{
 
-void
-__set_up_exprate_pointers()
-	CODE:
-		/* Assign the pointers */
-        exprate_three_by_three_Householder
-            = INT2PTR(SvIV(get_sv("PDL::Fit::ExpRate::__householder_func_addr", 0)));
-        exprate_quadratic_fit
-            = INT2PTR(SvIV(get_sv("PDL::Fit::ExpRate::__quadratic_func_addr", 0)));
-        exprate_accum_sum_sq_err
-            = INT2PTR(SvIV(get_sv("PDL::Fit::ExpRate::__accum_func_addr", 0)));
-        exprate_estimate_parameters
-            = INT2PTR(SvIV(get_sv("PDL::Fit::ExpRate::__estimate_func_addr", 0)));
-        exprate_newton_method_step
-            = INT2PTR(SvIV(get_sv("PDL::Fit::ExpRate::__newton_func_addr", 0)));
-
-XSCODE
-
-
-############################################
-# Module code that performs the assignment #
-############################################
-pp_addpm q{
-    # Include the ExpRate module
-    use PDL::Fit::ExpRate;
+    /* Ensure that PDL::Fit::ExpRate is loaded */
+    load_module(PERL_LOADMOD_NOIMPORT, newSVpv("PDL::Fit::ExpRate", 0), 0);
     
-    # Add code to the module that executes the pointer assignment
-    __set_up_exprate_pointers();
-};
+    /* Assign the pointers */
+    SV * the_sv = get_sv("PDL::Fit::ExpRate::__householder_func_addr", 0);
+    exprate_three_by_three_Householder = INT2PTR(void*, SvIV(the_sv));
+    the_sv = get_sv("PDL::Fit::ExpRate::__quadratic_func_addr", 0);
+    exprate_quadratic_fit = INT2PTR(void*, SvIV(the_sv));
+    the_sv = get_sv("PDL::Fit::ExpRate::__accum_func_addr", 0);
+    exprate_accum_sum_sq_err = INT2PTR(void*, SvIV(the_sv));
+    the_sv = get_sv("PDL::Fit::ExpRate::__estimate_func_addr", 0);
+    exprate_estimate_parameters = INT2PTR(void*, SvIV(the_sv));
+    the_sv = get_sv("PDL::Fit::ExpRate::__newton_func_addr", 0);
+    exprate_newton_method_step = INT2PTR(void*, SvIV(the_sv));
+
+});
+
 
 }
 
