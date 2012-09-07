@@ -82,7 +82,7 @@ pp_def('my_fit_quadratic',
 	Pars => 'xs(n); ys(n); [o] coefs(m=3)',
 	GenericTypes => ['D'],
 	Code => pp_line_numbers(__LINE__, q{
-		_fit_quadratic($P(xs), $P(ys), $SIZE(n), $P(coefs));
+		exprate_fit_quadratic($P(xs), $P(ys), $SIZE(n), $P(coefs));
 	}),
 );
 
@@ -102,7 +102,7 @@ pp_def('my_exp_fit_newton_method_step' =>
 	GenericTypes => ['D'],
 	Code => q{
 		/* The A/B/lambda values are modified in-place */
-		_exp_fit_newton_method_step($P(xs), $P(ys), $SIZE(n), $trust_radii(),
+		exprate_newton_method_step($P(xs), $P(ys), $SIZE(n), $trust_radii(),
 			&($As()), &($Bs()), &($lambdas()), &($sum_sq_err()));
 	},
 );
