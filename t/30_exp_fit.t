@@ -6,12 +6,13 @@ use PDL;
 use PDL::Fit::ExpRate;
 
 # Create some data and fit it
-my $xs = sequence(30);
+my $xs = sequence(30) + 100;
 my $ys = 150 + 10 * exp($xs / -10);
+
 my ($As, $Bs, $taus) = fit_exp_rate($xs, $ys
 	, threshold => 0.00001
 	, iterations => 200
-	, trust_radius => 0.1,
+	, trust_radius => 0.1
 );
 my $expected = pdl(150, 10, -10);
 my $coefs = pdl($As, $Bs, $taus)->flat;

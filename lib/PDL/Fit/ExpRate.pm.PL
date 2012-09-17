@@ -330,6 +330,17 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 	double accum_exp_fit_sum_sq_err (double * xs, double * ys, int n_values,
 		double A, double B, double lambda
 	) {
+		int i;
+		double total_sq_err = 0, err;
+		for (i = 0; i < n_values; i++) {
+			err = A + B * exp(lambda * xs[i]) - ys[i];
+			total_sq_err += err*err;
+		}
+		return total_sq_err;
+		
+		/*
+		 * Old Code replaced by the faster, simpler accumulator above
+		 * 
 		if (n_values == 1) {
 			double err = A + B * exp(lambda * xs[0]) - ys[0];
 			return err*err;
@@ -341,7 +352,8 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 		}
 		int half = n_values/2;
 		return accum_exp_fit_sum_sq_err(xs, ys, half, A, B, lambda)
-			+ accum_exp_fit_sum_sq_err(xs, ys, n_values - half, A, B, lambda);
+			+ accum_exp_fit_sum_sq_err(xs + half, ys + half, n_values - half, A, B, lambda);
+		*/
 	}
 	
 	void _exp_fit_estimate_parameters(
@@ -353,10 +365,20 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 		double coefs[3];
 		_fit_quadratic(xs, ys, length, coefs);
 		
-		*lambda = 2 * coefs[2] / coefs[1];
-		*B = coefs[1] / (*lambda);
-		*A = coefs[0] - (*B);
+		/* I have found that I tend to get the best results when I use
+		 * the average x-position. */
+		double x = 0;
+		int i = 0;
+		for (i = 0; i < length; i++) x += xs[i];
+		x /= (double)length;
 		
+		/* Compute the coefficients by approximating the exponential by
+		 * a quadratic fit, evaluated at the average x position. */
+		*lambda = 2.0 * coefs[2] / (coefs[1] + 2.0 * coefs[2] * x);
+		*B = (coefs[1] + 2.0 * coefs[2] * x)
+			/ ((*lambda) * exp(*lambda * x));
+		*A = coefs[0] + coefs[1] * x + coefs[2] * x*x
+			- (*B) * exp(*lambda * x);
 		(*sum_sq_error) = accum_exp_fit_sum_sq_err(xs, ys, length,
 			(*A), (*B), (*lambda));
 	}
@@ -644,6 +666,15 @@ pp_def('fit_exp_rate',
 		SV ** per_iteration_code_ref_p = hv_fetchs(options_hv, "run_each_iteration", 0);
 		int callback_return;
 		
+		/* Minimum lambda before 'failing' */
+		SV ** min_lambda_p = hv_fetchs(options_hv, "min_lambda", 0);
+		double min_lambda = min_lambda_p ? SvNV(*min_lambda_p) : 1e-8;
+		
+		/* Maximum lambda for the initial estimate; value 0 means any
+		 * value is allowed */
+		SV ** max_lambda_p = hv_fetchs(options_hv, "max_lambda", 0);
+		double max_lambda = max_lambda_p ? SvNV(*max_lambda_p) : 0;
+		
 		/* Get the trust radius or choose a default of 10% */
 		SV ** trust_radius_p = hv_fetchs(options_hv, "trust_radius", 0);
 		double trust_radius = trust_radius_p ? SvNV(*trust_radius_p) : 0.1;
@@ -687,6 +718,8 @@ pp_def('fit_exp_rate',
 			) {
 				counter++;
 				if (counter > max_iterations) break;
+				if (fabs(lambda) < min_lambda) break;
+				if (max_lambda > 0 && fabs(lambda) > max_lambda) break;
 				
 				/* Per-iteration callback */
 				if (per_iteration_code_ref_p != NULL) DO_ITERATION_CALLBACK;
@@ -698,7 +731,6 @@ pp_def('fit_exp_rate',
 					&A, &B, &lambda, &sum_sq_error);
 			}
 
-
 			/* Final per-iteration callback */
 			if (per_iteration_code_ref_p != NULL) DO_ITERATION_CALLBACK;
 
@@ -709,7 +741,8 @@ pp_def('fit_exp_rate',
 			$As() = A;
 			$Bs() = B;
 			$taus() = 1/lambda;
-			$is_bad() = 0;
+			$is_bad() = fabs(lambda) < min_lambda
+					||  (max_lambda > 0 && fabs(lambda) > max_lambda);
 			
 			/* Per-fit callback */
 			if (per_fit_code_ref_p != NULL) DO_FIT_CALLBACK;
@@ -725,29 +758,29 @@ pp_def('fit_exp_rate',
 #####################################
 
 pp_add_boot pp_line_numbers(__LINE__, q{
-    
-    /* Set global variables with the function addresses, used (potentially)
-     * by PDL::PP::Include::Fit::ExpRate-based code */
-    
-    /* householder */
-    SV * address_sv = get_sv("PDL::Fit::ExpRate::__householder_func_addr", GV_ADD);
-    sv_setiv(address_sv, PTR2IV(&_three_by_three_Householder));
-    
-    /* quadratic fit */
-    address_sv = get_sv("PDL::Fit::ExpRate::__quadratic_func_addr", GV_ADD);
-    sv_setiv(address_sv, PTR2IV(&_fit_quadratic));
-    
-    /* exponential error accumulator */
-    address_sv = get_sv("PDL::Fit::ExpRate::__accum_func_addr", GV_ADD);
-    sv_setiv(address_sv, PTR2IV(&accum_exp_fit_sum_sq_err));
-    
-    /* parameter estimator */
-    address_sv = get_sv("PDL::Fit::ExpRate::__estimate_func_addr", GV_ADD);
-    sv_setiv(address_sv, PTR2IV(&_exp_fit_estimate_parameters));
-    
-    /* newton step */
-    address_sv = get_sv("PDL::Fit::ExpRate::__newton_func_addr", GV_ADD);
-    sv_setiv(address_sv, PTR2IV(&_exp_fit_newton_method_step));
+	
+	/* Set global variables with the function addresses, used (potentially)
+	 * by PDL::PP::Include::Fit::ExpRate-based code */
+	
+	/* householder */
+	SV * address_sv = get_sv("PDL::Fit::ExpRate::__householder_func_addr", GV_ADD);
+	sv_setiv(address_sv, PTR2IV(&_three_by_three_Householder));
+	
+	/* quadratic fit */
+	address_sv = get_sv("PDL::Fit::ExpRate::__quadratic_func_addr", GV_ADD);
+	sv_setiv(address_sv, PTR2IV(&_fit_quadratic));
+	
+	/* exponential error accumulator */
+	address_sv = get_sv("PDL::Fit::ExpRate::__accum_func_addr", GV_ADD);
+	sv_setiv(address_sv, PTR2IV(&accum_exp_fit_sum_sq_err));
+	
+	/* parameter estimator */
+	address_sv = get_sv("PDL::Fit::ExpRate::__estimate_func_addr", GV_ADD);
+	sv_setiv(address_sv, PTR2IV(&_exp_fit_estimate_parameters));
+	
+	/* newton step */
+	address_sv = get_sv("PDL::Fit::ExpRate::__newton_func_addr", GV_ADD);
+	sv_setiv(address_sv, PTR2IV(&_exp_fit_newton_method_step));
 });
 
 pp_addpm <<'DOCUMENTATION';
