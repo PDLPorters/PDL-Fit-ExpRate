@@ -742,7 +742,8 @@ pp_def('fit_exp_rate',
 			$Bs() = B;
 			$taus() = 1/lambda;
 			$is_bad() = fabs(lambda) < min_lambda
-					||  (max_lambda > 0 && fabs(lambda) > max_lambda);
+					|| (max_lambda > 0 && fabs(lambda) > max_lambda)
+					|| counter > max_iterations;
 			
 			/* Per-fit callback */
 			if (per_fit_code_ref_p != NULL) DO_FIT_CALLBACK;
