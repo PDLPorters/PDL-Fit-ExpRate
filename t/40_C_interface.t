@@ -1,10 +1,23 @@
 # tests for C interface
 use strict;
 use warnings;
+
+# Only run these tests if Inline is installed. Chances are very high
+# that it will be installed, as Inline is a prerequisite for PDL, but
+# we'll play it safe anyway.
+BEGIN {
+    eval q{
+        require Inline;
+        Inline->import('Pdlpp');
+        1;
+    } or do {
+        print("1..0 # Skip: C interface testing requires the Inline module\n");
+        exit(0);
+    };
+}
+
 use Test::More tests => 10;
 use PDL;
-#use Inline 'Noclean';
-use Inline 'Pdlpp';
 use PDL::Fit::ExpRate;
 
 # Householder (1)
