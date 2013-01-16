@@ -6,14 +6,14 @@ use warnings;
 # that it will be installed, as Inline is a prerequisite for PDL, but
 # we'll play it safe anyway.
 BEGIN {
-    eval q{
-        require Inline;
-        Inline->import('Pdlpp');
-        1;
-    } or do {
-        print("1..0 # Skip: C interface testing requires the Inline module\n");
-        exit(0);
-    };
+	eval q{
+		require Inline;
+		Inline->import('Pdlpp');
+		1;
+	} or do {
+		print("1..0 # Skip: C interface testing requires the Inline module\n");
+		exit(0);
+	};
 }
 
 use Test::More tests => 10;
@@ -57,7 +57,6 @@ is($A1, $A2, 'Updates A the same');
 is($B1, $B2, 'Updates B the same');
 is($lambda1, $lambda2, 'Updates lambda the same');
 is($sum_sq_error1, $sum_sq_error2, 'Calculates the same sum_sq_error');
-
 
 __DATA__
 
