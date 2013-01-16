@@ -6,3 +6,5 @@ t/10_three-by-three.t
 t/20_quadratic.t
 t/30_exp_fit.t
 typemap
+META.yml
+META.json

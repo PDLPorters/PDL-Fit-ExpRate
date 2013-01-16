@@ -23,7 +23,7 @@ my $build = Module::Build->current;
 # Add the .xs file to the cleanup lists:
 $build->add_to_cleanup("$base_name.xs");
 
-our $VERSION = 0.01;
+our $VERSION = 0.01_01;
 pp_setversion($VERSION);
 
 pp_addpm <<'DOCUMENTATION';
