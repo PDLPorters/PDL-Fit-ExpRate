@@ -26,6 +26,9 @@ $build->add_to_cleanup("$base_name.xs");
 our $VERSION = 0.01_01;
 pp_setversion($VERSION);
 
+# Totally unnecessary, but needed for CPAN indexing.
+package PDL::Fit::ExpRate;
+
 pp_addpm <<'DOCUMENTATION';
 
 =head1 NAME
