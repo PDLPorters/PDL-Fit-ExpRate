@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-my $VERSION = 0.02;
+my $VERSION = 0.02_01;
 
 # Totally unnecessary, but needed for CPAN indexing.
 package PDL::Fit::ExpRate;
