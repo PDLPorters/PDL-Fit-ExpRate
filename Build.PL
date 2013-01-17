@@ -31,6 +31,7 @@ my $build = Module::Build->new(
 			directory => [qw(examples t)],
 		},
 	},
+	license => 'perl',
 );
 
 $build->create_build_script;
