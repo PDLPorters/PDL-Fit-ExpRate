@@ -1,8 +1,6 @@
 use strict;
 use warnings;
 
-my $VERSION = 0.02_01;
-
 # Totally unnecessary, but needed for CPAN indexing.
 package PDL::Fit::ExpRate;
 
@@ -17,18 +15,17 @@ BEGIN {
 	# Handle backslashes for Windows paths:
 	$base_name =~ s/\\/\\\\/g;
 }
-use PDL::PP (qw(PDL::Fit::ExpRate PDL::Fit::ExpRate), $base_name);
+use PDL::PP (__PACKAGE__, __PACKAGE__, $base_name);
+
+# Add the .xs file to the cleanup lists:
+use Module::Build;
+my $build = Module::Build->current;
+$build->add_to_cleanup("$base_name.xs");
 
 # Set the module version from the version stashed in the M::B object. The string
 # passed to pp_setversion must include the quotes to ensure that it is processed
 # as a string from the actual module:
-use Module::Build;
-my $build = Module::Build->current;
-
-# Add the .xs file to the cleanup lists:
-$build->add_to_cleanup("$base_name.xs");
-
-pp_setversion($VERSION);
+pp_setversion('"' . $build->dist_version . '"');
 
 pp_addpm <<'DOCUMENTATION';
 
@@ -115,21 +112,53 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 	 * in-place before doing back-substitution to solve for x (which it also
 	 * modifies in-place). */ 
 	void _three_by_three_Householder (double A[3][3], double y[3], double x[3]) {
-		double alpha, beta, gamma;
+		double alpha, gamma;
 		int j, k, n, m;
 		double v[3];
+		double norm_of_max_column, current_norm;
 		
-		// -- Upper-triangulize -- //
+		/* This needs to be volatile so that in comparison with zero on line 140
+		 * is correct. The better solution would be to perform column pivoting,
+		 * but for now this gets me around the -O3 optimization issue. */
+		volatile double beta;
 		
-		for (n = 0; n < 3; n++) {
-			/* Compute alpha and build v */
-			alpha = 0;
+		/* For column pivotin, we start with the columns in-order. */
+		int column_order[3] = {0, 1, 2};
+		int real_n;
+		
+		/* -- Upper-triangulize -- */
+		
+		for (n = 0; n < 3; n++) {     /* Loop over columns */
+			
+			/* -- Calculate pivot -- */
+			norm_of_max_column = 0;
 			for (m = n; m < 3; m++) {
-				alpha += A[n][m] * A[n][m];
-				v[m] = A[n][m];
+				norm_of_max_column += A[column_order[n]][m]*A[column_order[n]][m];
+			}
+			for (m = n+1; m < 3; m++) {
+				current_norm = 0;
+				for (j = n; j < 3; j++) {
+					current_norm += A[column_order[m]][j]*A[column_order[m]][j];
+				}
+				/* pivot if some other column has larger norm */
+				if (norm_of_max_column < current_norm) {
+					int temp = column_order[n];
+					column_order[n] = column_order[m];
+					column_order[m] = temp;
+				}
+			}
+			real_n = column_order[n];
+			
+			/* Compute the Householder vector, v, for the current column; 
+			 * alpha is a temporary calculation for this */
+			alpha = 0;
+			v[0] = v[1] = v[2] = 0;
+			for (m = n; m < 3; m++) {
+				alpha += A[real_n][m] * A[real_n][m];
+				v[m] = A[real_n][m];
 			}
 			alpha = sqrt(alpha);
-			if (A[n][n] > 0)
+			if (A[real_n][real_n] > 0)
 				alpha = -alpha;
 			v[n] -= alpha;
 			
@@ -138,7 +167,8 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 				beta += v[m] * v[m];
 			}
 			
-			if (beta != 0) {
+			// Only work with values of beta that are definitely nonzero
+			if (beta > 0) {
 
 				// apply the Householder transformation to the
 				// remaining submatrix, column j, row k
@@ -146,13 +176,13 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 					// Get the dot product of v and the jth
 					// column of the submatrix, called gamma:
 					gamma = 0;
-					for (k = n; k < 3; k++) gamma += v[k] * A[j][k];
+					for (k = n; k < 3; k++) gamma += v[k] * A[column_order[j]][k];
 					
-					// now subtract a scaled version of v, based
 					// on gamma, from the submatrix's jth
+					// now subtract a scaled version of v, based
 					// column:
 					for (k = n; k < 3; k++)
-						A[j][k] -= 2 * gamma / beta * v[k];
+						A[column_order[j]][k] -= 2 * gamma / beta * v[k];
 				}
 				
 				// -- apply the Householder transformation to y -- //
@@ -178,9 +208,9 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 			for (k = 2; k > j; k--) {
 				// This part of the loop is not entered until x[k]
 				// is already defined
-				alpha -= A[k][j] * x[k];
+				alpha -= A[column_order[k]][j] * x[column_order[k]];
 			}
-			x[j] = alpha / A[j][j];
+			x[column_order[j]] = alpha / A[column_order[j]][j];
 		}
 	}
 });

@@ -6,9 +6,11 @@ use PDL::Core::Dev;
 my $inc = PDL_INCLUDE;
 $inc =~ s/^-I//;
 
+my $version = 0.02_01;
+
 my $build = Module::Build->new(
 	module_name => 'PDL::Fit::ExpRate',
-	dist_version_from => 'lib/PDL/Fit/ExpRate.pm.PL',
+	dist_version => $version,
 	license  => 'perl',
 	configure_requires => {
 		# meta_merge was added in v 0.28:
