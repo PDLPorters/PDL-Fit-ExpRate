@@ -4,7 +4,8 @@ use warnings;
 use PDL::Core::Dev;
 
 my $inc = PDL_INCLUDE;
-$inc =~ s/^-I//;
+$inc =~ s/^"?-I//;
+$inc =~ s/"$//;
 
 my $version = 0.02_01;
 
