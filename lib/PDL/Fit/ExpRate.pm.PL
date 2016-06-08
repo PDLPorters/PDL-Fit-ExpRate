@@ -846,3 +846,5 @@ the same terms as Perl itself. See L<perlartistic>.
 =cut
 
 DOCUMENTATION
+
+pp_done;
