@@ -401,6 +401,43 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 	}
 });
 
+=head2 exp_fit_estimate_parameters
+
+=cut
+
+$documentation = <<'DOCUMENTATION';
+
+=for ref
+
+Given x and y data, determines A, B, and lambda for y = A + B exp(x*lambda)
+
+This function obtains an initial estimate for the parameters of an exponential
+decay. It also returns the sum of the squared errors for the fit. It obtains
+parameter estimates by fitting the data to a quadratic function, then mapping the
+coefficients of the quadratic to the coefficients of an exponential function
+using a Taylor Series. For example:
+
+=for example
+
+ # Make some noisy data
+ my $xs = sequence(50);
+ my $ys = 5 + 3 * exp($xs * 0.04) + grandom($xs) * 0.1;
+ print "        A      B   lambda    err\n";
+ 
+ # Print the original parameters
+ printf "gave: %1.3f  %1.3f  %1.3f\n", 5, 3, 0.04;
+ 
+ # Get estimates for parameters
+ my ($A, $B, $lambda, $sum_sq_err) = exp_fit_estimate_parameters($xs, $ys);
+ printf "est:  %1.3f  %1.3f  %1.3f  %1.3f\n", $A, $B, $lambda, $sum_sq_err;
+
+This is a simple PDL wrapper for the internal C function
+C<exprate_estimate_parameters> provided in L<PDL::PP::Include::Fit::ExpRate>.
+
+=cut
+
+DOCUMENTATION
+
 pp_def('exp_fit_estimate_parameters' =>
 	Pars => 'xs(n); ys(n); [o] As(); [o] Bs(); [o] lambdas(); [o] sum_sq_errors()',
 	GenericTypes => ['D'],
@@ -409,7 +446,7 @@ pp_def('exp_fit_estimate_parameters' =>
 		_exp_fit_estimate_parameters($P(xs), $P(ys), $SIZE(n),
 				$P(As), $P(Bs), $P(lambdas), $P(sum_sq_errors));
 	},
-	Doc => q{Uses a quadratic fit to estimate the parameters of the exponential curve},
+	Doc => $documentation,
 );
 
 #############################
@@ -492,10 +529,82 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 	}
 });
 
+=head2 exp_fit_newton_method_step
+
+=cut
+
+$documentation = <<'DOCUMENTATION';
+
+=for ref
+
+Takes a single gaurded Newton-method step for the iterative fitting process
+
+While the above method, C<exp_fit_estimate_parameters>, can give reasonable
+estimates for an exponential fit, a proper fit involves an iterative Newton
+method. Such a method evaluates the local gradient of the error and takes a
+step in the direction toward the estimated minimum of the error. The method
+can only estimate where the minimum is located, so it limits the size of its
+steps so as not to go too far. While the full fittinig routine performs many
+steps, this function performs only a single step.
+
+This function takes a number of parameters, and returns quite a few as well.
+The input values include the data as well as the previous best guess at the
+parameters for A, B, and lambda in the equation
+
+ y = A + B * exp(x * lambda)
+
+The function returns the result of a single gaurded Newton method iteration.
+Such a step is guaranteed to fall within the specified trust radius, which I
+explain more in a moment. The function also returns the sum of the squared
+errors for the new parameters.
+
+=for example
+
+ # Make some noisy data
+ my $xs = sequence(50);
+ my $ys = 5 + 3 * exp($xs * 0.04) + grandom($xs) * 0.1;
+ print "          A      B   lambda  err\n";
+ 
+ # Get initial estimates for parameters
+ my ($A, $B, $lambda, $sum_sq_err) = exp_fit_estimate_parameters($xs, $ys);
+ printf "step 0: %1.3f  %1.3f  %1.3f  %1.3f\n", $A, $B, $lambda, $sum_sq_err;
+ 
+ # Perform many single steps to see how it goes
+ my $trust_radius = 0.1;  # trust radius of 10%
+ for (1 .. 9) {
+   ($A, $B, $lambda, $sum_sq_err)
+     = exp_fit_newton_method_step($xs, $ys, $trust_radius, $A, $B, $lambda);
+   printf "step $_: %1.3f  %1.3f  %1.3f  %1.3f\n", $A, $B, $lambda, $sum_sq_err;
+ }
+ 
+ # Print the original parameters
+ print '=' x 35, "\n";
+ printf "gave:   %1.3f  %1.3f  %1.3f\n", 5, 3, 0.04;
+
+The trust radius ensures that each of the parameters does not change by more
+than the specified amount in a given step. The basic idea is that we want to
+find the minimum in the surface representing the sum of the squared errors,
+and we do this by locally approximating the surface by a quadratic. This local
+approximation is only accurate within a small parameter radius, so if the
+minimum of the local quadratic is too far away, it would be unwise to go all
+the way to that location. A trust radius of 0.1 (i.e. 10%) means you do not
+want your estimates to change by more than 10%.
+
+You should avoid a trust radius larger than 1. Such a large trust radius would
+make it possible to change the sign of your parameters. If you find that you
+are getting the wrong sign for your parameters, you should find a better initial
+estimate rather than increase your trust radius.
+
+=cut
+
+DOCUMENTATION
+
+
 pp_def('exp_fit_newton_method_step' =>
 	Pars => 'xs(n); ys(n); trust_radii(); in_As(); in_Bs(); in_lambdas();
 			[o] out_As(); [o] out_Bs(); [o] out_lambdas(); [o] sum_sq_err()',
 	GenericTypes => ['D'],
+	Doc => $documentation,
 	Code => q{
 		/* The A/B/lambda values are modified in-place by the original function
 		 * so copy the input values to the output values before calling the
