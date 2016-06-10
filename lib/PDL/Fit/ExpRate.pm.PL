@@ -48,7 +48,7 @@ This document describes PDL::Fit::ExpRate version 0.02
  my $ys = $A + $B * exp($xs / $tau) + $xs->grandom;
  
  # Extract the parameters
- my ($fit_A, $fit_b, $fit_tau) = fit_exp_rate($xs, $ys);
+ my ($fit_A, $fit_B, $fit_tau) = fit_exp_rate($xs, $ys);
  
  print "A was $A; fit as $fit_A\n";
  print "B was $B; fit as $fit_B\n";
@@ -66,7 +66,16 @@ This document describes PDL::Fit::ExpRate version 0.02
  # y = coefs[0] + coefs[1] * x + coefs[2] * x**2
  my $coefs = fit_quadratic($xs, $ys);
  
- # and more yet to be documented...
+ # Use a callback to get more information from the fit
+ ($fit_A, $fit_B, $fit_tau) = fit_exp_rate($xs, $ys,
+     run_each_fit => sub {
+         my %info = @_;
+         print "Full details at end of fit:\n";
+         for my $k (sort keys %info) {
+             print " $k => $info{$k}\n";
+         }
+     }
+ );
 
 =head1 DESCRIPTION
 
@@ -621,16 +630,6 @@ pp_def('exp_fit_newton_method_step' =>
 	},
 );
 
-# Needs to go into docs:
-# Options:
-# run_each_fit => subref that is run at the end of each fit (responsive system)
-# run_each_iteration => subref run at the beginning of each iteration (debuggin)
-# trust_radius => floating point; default is 10%, i.e. 0.1
-# iterations => integer; max number of iterations per fit (default is 50)
-# threshold => floating point; pct-diff for old and new score as stop condition
-#              (default is 0.001)
-
-
 ################################
 # Code to handle the callbacks #
 ################################
@@ -677,7 +676,7 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 		SAVETMPS; \
 		\
 		PUSHMARK(SP); \
-		EXTEND(SP, 12); \
+		EXTEND(SP, 20); \
 		PUSHs(sv_2mortal(newSVpv("fit_count", 9))); \
 		PUSHs(sv_2mortal(newSViv(total_count))); \
 		PUSHs(sv_2mortal(newSVpv("N_fits", 6))); \
@@ -690,6 +689,14 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 		PUSHs(sv_2mortal(newSVnv(threshold))); \
 		PUSHs(sv_2mortal(newSVpv("N_rounds", 8))); \
 		PUSHs(sv_2mortal(newSViv(counter))); \
+		PUSHs(sv_2mortal(newSVpv("A", 1))); \
+		PUSHs(sv_2mortal(newSVnv(A))); \
+		PUSHs(sv_2mortal(newSVpv("B", 1))); \
+		PUSHs(sv_2mortal(newSVnv(B))); \
+		PUSHs(sv_2mortal(newSVpv("tau", 3))); \
+		PUSHs(sv_2mortal(newSVnv(1.0/lambda))); \
+		PUSHs(sv_2mortal(newSVpv("converged", 9))); \
+		PUSHs(sv_2mortal(newSVnv(converged))); \
 		PUTBACK; \
 		\
 		callback_return = call_sv(*per_fit_code_ref_p, G_SCALAR); \
@@ -713,6 +720,235 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 # The main all-encompasing fitting function #
 #############################################
 
+=head2 fit_exp_rate
+
+=cut
+
+$documentation = <<'DOCUMENTATION';
+
+=for ref
+
+Fits your data to an exponential decay or growth
+
+This is the primary method of PDL::Fit::ExpRate. This method takes your
+x and y data and computes a best-fit for the parameters A, B, and tau in
+the equation
+
+                  x[i] / tau
+ y[i] = A + B * e
+
+If a fit fails to converge, the values of A, B, and tau for that dataset
+will be set to C<BAD> (see L<PDL::Bad> for details).
+
+In additon to the x/y data, you can optionally include A, B, and tau.
+For most PDL methods, this provides a means to pre-allocate (or use
+previously allocated) memory for the output, which can be important for
+large data operations. That's not likely to be the case for this method,
+but the mechanism is provided for consistency. This can also be used if
+you want to provide your own initial estimates for A, B, and tau, which
+you may find useful if the quadratic estimate method is not working well
+for your data. The method assumes the latter, but if you are simply want
+to pass along pre-allocated piddles, see the C<pre_allocated> flag below.
+Either way, the method will overwrite the data in A, B, and tau, as they
+are considered output piddles.
+
+After piddle arguments x and y (and optionally A, B, and tau), you can
+specify key/value pairs that govern how the fit is performed. Options
+include:
+
+=over
+
+=item pre_allocated
+
+If you pre-allocated piddles for A, B, and tau, and are not providing
+them as initial estimates, then you should include this key with a
+boolean true value, i.e. 1.
+
+=item trust_radius
+
+The trust radius for the fit(s), which governs how much the parameters
+will evolve with a single iteration. See the documentation for
+C<exp_fit_newton_method_step> for a more complete explanation of this
+parameter. The default value is 0.1, i.e. 10%.
+
+=item iterations
+
+The maximum number of iterations, i.e. the fit must converge before this
+number of iterations or it will be considered a failed fit. The default
+value is 50.
+
+=item threshold
+
+The sum of the squared errors will vary as the fit iterates. As the fit
+converges, the deviations will get very small. The C<threshold> indicates
+the deviations that are acceptable to declare convergence. This is not the
+percent difference in the parameters, but in the sum of the squared errors.
+The default is 0.001.
+
+Note that for noiseless data, the fitting routine may run into issues with
+bit noise in its calculations for the sum of the squared errors. If it
+detects that the sum of the squared errors has fallen into bitnoise, it
+will deem the system converged and disregard the threshold.
+
+=item min_lambda, max_lambda
+
+You may have physical reasons for expecting your exponential rates to fall
+within certain ranges. If so, you can provide the min and max values of
+lambda that are allowed. (Lambda is the inverse of tau.) The magnitudes
+of these numbers will be compared with the magnitudes of the lambda value
+with each iteration of the fit, and if the fit value falls outside of the
+given range, the fit will be considered a failure. If you do not want to
+impose any limitations, set both of these to zero. The default value for
+max_lambda is zero (no limit) but the default value for min_lambda is
+1e-8.
+
+=item run_each_fit
+
+A callback that gets called at the completion of each fit. This was
+implemented primarily for use in progress indicators and GUI applications.
+However, it is also useful for getting more information about each fit
+than is returned by the method itself. The items passed to the callback are
+key/value pairs (i.e. something that you can assign to a hash) that
+include:
+
+  N_fits     - number of fits we're doing
+  fit_count  - number of fits we've completed
+  A          - final value for A for this fit
+  B          - final value for B for this fit
+  tau        - final value for tau for this fit
+  converged  - boolean indicating if the routine will declare
+               that this fit has converged
+  sum_sq_err - last sum of the squared deviations for the
+               just-completed fit
+  old_sum_sq_err
+             - previous sum of the squared deviations for the
+               just-completed fit
+  threshold  - threshold, see option above
+  N_rounds   - number of rounds required for convergence
+
+Note that if C<converged> is false, the method will eventually return
+values for A, B, and tau that are BAD. This callback provides a way to
+get the last (but unsuccessful) values of A, B, and tau, which may be
+helpful in certain circumstances. Usually, converged will be true if
+(sum_sq_err - old_sum_sq_err) / old_sum_sq_err < threshold. It might also
+be true if the data is noise-free and sum_sq_err has fallen to the level
+of bit noise.
+
+The return value of this callback is meaningful. If it is false, the
+PDL function will abort without threading over any more datasets. If it
+is true, the PDL function will continue. This has seen use in GUI
+programs that initiate a large number of fits. The callback was used to
+keep the GUI responsive, and to make it possible for the user to cancel
+the fits mid-calculation.
+
+A simple progress indicator might look like this:
+
+ my ($As, $Bs, $taus) = fit_exp_rate($xs, $ys,
+     run_each_fit => sub {
+         my %info = @_;
+         print "Completed $info{fit_count} of $info{N_fits}\n";
+         return 1;
+     },
+ );
+
+=item run_each_iteration
+
+A callback that gets called at the completion of each iteration of each
+fit. As this will get called with each round of the iteration, an
+iteration callback can have a significant performance impact. As such,
+this is primarily useful as a debugging aid when your fit fails to
+converge. In such circumstances, you can add an iteration callback to
+print how the parameters are evolving, which may help figure out how to
+tweak the parameters that govern the iterative process.
+
+The items passed to the callback are key/value pairs (i.e. something
+that you can assign to a hash) that include:
+
+  A           - current value for A for this fit
+  B           - current value for B for this fit
+  lambda      - current value for 1/tau for this fit
+  round       - iteration count
+  sum_sq_err  - last sum of the squared deviations for the
+                just-completed fit
+  old_sum_sq_err
+              - previous sum of the squared deviations for
+                the just-completed fit
+  threshold   - threshold, see option above
+  force_round - boolean indicating whether the next round
+                is forced, which happens if the Newton
+                method step was confined by the trust radius
+
+Of these, C<force_next_round> probably needs a bit of clarification. If
+the Newton method step was truncated by the C<trust_radius>, then the
+change in the sum of the squared errors may not have changed much. In
+that case, the threshold limit could erroneously indicate convergence.
+For this reason, the method will always perform another iteration when
+the step gets truncated by the trust radius. The value of C<force_next_round>
+will indicate if this is the case.
+
+=back
+
+All of these values are either scalars or function references, but are
+not piddles. So, unlike the trust radius in C<exp_fit_newton_method_step>,
+if you utilize PDL's threading to perform exponential fits over multiple
+datasets in one call, they will all use this same value of the trust_radius
+and the other parameters.
+
+Notice that, unlike exp_fit_newton_method_step, this method does not
+return the sum of the squared errors. If you want that information, you
+should supply a per-fit callback which collects the result.
+
+Here are some examples of how to use the function:
+
+ # Make some noisy data
+ my $xs = sequence(500);
+ my $ys = 5 + 3 * exp($xs * -0.05) + grandom($xs) * 0.5;
+ print "   A      B      tau\n";
+ 
+ # Use default parameters
+ my ($A, $B, $tau) = fit_exp_rate($xs, $ys);
+ printf " %1.3f  %1.3f  %1.3f  -> defaults\n", $A->sclr, $B->sclr, $tau->sclr;
+ 
+ # See how things as we tighten the threshold a bit
+ for my $threshold (0.1, 0.01, 0.001, 0.0001, 0.00001) {
+     ($A, $B, $tau) = fit_exp_rate($xs, $ys,
+       threshold => $threshold
+     );
+     printf " %1.3f  %1.3f  %1.3f  -> threshold = $threshold\n", $A->sclr, $B->sclr, $tau->sclr;
+ }
+ 
+ print '=' x 35, "\n";
+ printf " %1.3f  %1.3f  %1.3f  -> values for generating data\n", 5, 3, -1/0.05;
+ 
+ # Use callback to track the convergence of A
+ my @As;
+ ($A, $B, $tau) = fit_exp_rate($xs, $ys,
+     run_each_iteration => sub {
+         my %info = @_;
+         push @As, $info{A};
+     }
+ );
+ print "\nA:   ", join ("\n  -> ", @As), "\n";
+ 
+ # Use callback to print diagnostics
+ print '-' x 30, "\n";
+ ($A, $B, $tau) = fit_exp_rate($xs, $ys,
+    iterations => 100,
+	run_each_iteration => sub {
+		my %info = @_;
+		return if $info{round} % 5 != 0;
+		print "Round $info{round}:\n";
+		delete $info{round};
+		for my $k (sort keys %info) {
+			print "  $k: $info{$k}\n";
+		}
+	},
+ );
+
+=cut
+
+DOCUMENTATION
+
 pp_def('fit_exp_rate',
 	Pars => 'xs(n); ys(n); [o] As(); [o] Bs(); [o] taus(); int [o] is_bad()',
 	GenericTypes => ['D'],
@@ -729,9 +965,10 @@ pp_def('fit_exp_rate',
 			$xs = PDL::Core::topdl($xs);
 			$ys = PDL::Core::topdl($ys);
 			
-			my ($A, $B, $tau);
+			my ($A, $B, $tau, $provided_outputs);
 			if (eval {$_[0]->isa('PDL')} ) {
 				($A, $B, $tau) = (shift, shift, shift);
+				$provided_outputs = 1;
 			}
 			else {
 				my @dims = $xs->dims;
@@ -758,6 +995,12 @@ pp_def('fit_exp_rate',
 			
 			my %opts = @_;
 			
+			# If A, B, and tau were not provided, then set the
+			# pre-allocated flag.
+			$opts{pre_allocated} = 1 if not $provided_outputs;
+			# Make it integer 0 or 1 to reflect boolean state
+			$opts{pre_allocated} = $opts{pre_allocated} ? 1 : 0;
+			
 			# Determine the total number of rounds for the run
 			my $n_rounds = 1;
 			$n_rounds *= $_ for ($A->dims);
@@ -782,7 +1025,7 @@ pp_def('fit_exp_rate',
 		/* If we take a guarded step, then we force the next round. This is so
 		 * that the fit won't erroneously think it's converged just because the
 		 * guarded step led to a very small change in the sum_sq_error */
-		int force_next_round;
+		int force_next_round, converged;
 		
 		/**************************************/
 		/* Process all the optional arguments */
@@ -821,6 +1064,10 @@ pp_def('fit_exp_rate',
 		SV ** threshold_p = hv_fetchs(options_hv, "threshold", 0);
 		double threshold = threshold_p ? SvNV(*threshold_p) : 0.001;
 		
+		/* Determine if they provided initial estimates */
+		SV ** pre_allocated_p = hv_fetchs(options_hv, "pre_allocated", 0);
+		int already_estimated = 1 - SvIV(*pre_allocated_p);
+		
 		/* If the sum of the squared error drops below this, we're at the
 		 * level of bitnoise, so we'll declare victory (convergence). */
 		double minimum_calculable_sum_sq_error
@@ -838,8 +1085,15 @@ pp_def('fit_exp_rate',
 			total_count++;
 			
 			/* Perform the initial parameter estimate */
-			_exp_fit_estimate_parameters($P(xs), $P(ys), $SIZE(n), 
-				&A, &B, &lambda, &sum_sq_error);
+			if (already_estimated) {
+				A = $As();
+				B = $Bs();
+				lambda = 1 / $taus();
+			}
+			else {
+				_exp_fit_estimate_parameters($P(xs), $P(ys), $SIZE(n), 
+					&A, &B, &lambda, &sum_sq_error);
+			}
 			
 			/* Make sure we enter the loop */
 			force_next_round = 1;
@@ -882,6 +1136,7 @@ pp_def('fit_exp_rate',
 			$is_bad() = fabs(lambda) < min_lambda
 					|| (max_lambda > 0 && fabs(lambda) > max_lambda)
 					|| counter > max_iterations;
+			converged = !$is_bad();
 			
 			/* Per-fit callback */
 			if (per_fit_code_ref_p != NULL) DO_FIT_CALLBACK;
