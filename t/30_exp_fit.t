@@ -1,11 +1,12 @@
-# tests for quadratic fitting
 use strict;
 use warnings;
-use Test::More tests => 2;
+use Test::More;
 use PDL;
 use PDL::Fit::ExpRate;
 
-# Create some data and fit it
+##################
+# Small data set #
+##################
 my $xs = sequence(30) + 100;
 my $ys = 150 + 10 * exp($xs / -10);
 
@@ -15,20 +16,71 @@ my ($As, $Bs, $taus) = fit_exp_rate($xs, $ys
 	, trust_radius => 0.1
 );
 my $expected = pdl(150, 10, -10);
-my $coefs = pdl($As, $Bs, $taus)->flat;
-ok(all (approx($coefs, $expected, 1e-2)), 'Super-simple exponential fitting works')
-	or diag("Got $coefs but expected $expected");
+my $coefs = cat($As, $Bs, $taus)->flat;
+if (0 == $coefs->nbad) {
+	ok(all (approx($coefs, $expected, 1e-2)), 'Exponential fitting on small noise-less dataset works')
+		or do {
+			diag("Got $coefs but expected $expected");
+			($As, $Bs, $taus, my $err) = exp_fit_estimate_parameters($xs, $ys);
+			diag("Quadratic estimate gave A=$As, B=$Bs, and lambda=$taus; err=$err");
+		};
+}
+else {
+	fail('Exponential fitting on small noise-less dataset works');
+	diag "  -> Failed to converge";
+}
 
+###################################
+# Large data set with minor noise #
+###################################
 $xs = sequence(30000);
 my $tau = -1e5;
-$ys = 150 + 10 * exp($xs / $tau);
+$ys = 150 + 10 * exp($xs / $tau) + $xs->grandom*0.001;
 ($As, $Bs, $taus) = fit_exp_rate($xs, $ys
 	, threshold => 0.0001
 	, iterations => 400
 	, trust_radius => 0.1,
 );
-$coefs = pdl($As, $Bs, $taus)->flat;
+$coefs = cat($As, $Bs, $taus)->flat;
+if (0 == $coefs->nbad) {
+	$expected = pdl(150, 10, $tau);
+	ok(all (abs(($coefs - $expected) / $expected) < 1e-3)
+		, 'Exponential fitting with small noise and lots of data works')
+		or do {
+			diag("Got $coefs but expected $expected");
+			($As, $Bs, $taus, my $err) = exp_fit_estimate_parameters($xs, $ys);
+			diag("Quadratic estimate gave A=$As, B=$Bs, and lambda=$taus; err=$err");
+		};
+}
+else {
+	fail('Exponential fitting with small noise and lots of data works');
+	diag "  -> Failed to converge";
+}
+
+################################
+# Large data set with no noise #
+################################
+$ys = 150 + 10 * exp($xs / $tau);
+($As, $Bs, $taus) = fit_exp_rate($xs, $ys
+	, threshold => 0.0001
+	, iterations => 20
+	, trust_radius => 0.01
+);
+$coefs = cat($As, $Bs, $taus)->flat;
 $expected = pdl(150, 10, $tau);
-ok(all (abs(($coefs - $expected) / $expected) < 1e-7)
-	, 'Super-simple exponential fitting with lots of data works')
-	or diag("Got $coefs but expected $expected");
+if (0 == $coefs->nbad) {
+	ok(all (abs(($coefs - $expected) / $expected) < 1e-3)
+		, 'Exponential fitting with no noise and lots of data works')
+		or do {
+			diag("Got $coefs but expected $expected");
+			($As, $Bs, $taus, my $err) = exp_fit_estimate_parameters($xs, $ys);
+			$taus = 1/$taus;
+			diag("Quadratic estimate gave A=$As, B=$Bs, and tau=$taus; err=$err");
+		};
+}
+else {
+	fail('Exponential fitting with no noise and lots of data works');
+	diag "  -> Failed to converge";
+}
+
+done_testing;
