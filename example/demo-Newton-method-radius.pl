@@ -23,4 +23,4 @@ use PDL::Fit::ExpRate;
  
  # Print the original parameters
  print '=' x 35, "\n";
- printf "gave:   %1.3f  %1.3f  %1.3f\n", 5, 3, 0.04;
+ printf "gave:   %1.3f  %1.3f  %1.3f\n", 5, 3, -0.05;
