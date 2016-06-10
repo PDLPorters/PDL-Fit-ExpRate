@@ -1,7 +1,10 @@
 use strict;
 use warnings;
 
-# Totally unnecessary, but needed for CPAN indexing.
+# Totally unnecessary, but needed for to keep Module::Build happy and
+# for CPAN indexing. Notice how the VERSION declaration comes before the
+# package declaration? Yeah, that's the only way to get it to work. :-/
+our $VERSION = "0.03";
 package PDL::Fit::ExpRate;
 
 # Invoke PDL::PP
@@ -16,18 +19,18 @@ BEGIN {
 	$base_name =~ s/\\/\\\\/g;
 }
 use PDL::PP (__PACKAGE__, __PACKAGE__, $base_name);
+# The string passed to pp_setversion must include the quotes to ensure
+# that it is processed as a string from the actual module:
+pp_setversion("\"$VERSION\"");
 
 # Add the .xs file to the cleanup lists:
 use Module::Build;
 my $build = Module::Build->current;
 $build->add_to_cleanup("$base_name.xs");
 
-# Set the module version from the version stashed in the M::B object. The string
-# passed to pp_setversion must include the quotes to ensure that it is processed
-# as a string from the actual module:
-pp_setversion('"' . $build->dist_version . '"');
-
 pp_addpm <<'DOCUMENTATION';
+
+our $VERSION = "0.03";
 
 =head1 NAME
 
@@ -35,7 +38,7 @@ PDL::Fit::ExpRate - fitting noisy exponential decay
 
 =head1 VERSION
 
-This document describes PDL::Fit::ExpRate version 0.02
+This document describes PDL::Fit::ExpRate version 0.03
 
 =head1 SYNOPSIS
 

@@ -11,7 +11,7 @@ my $version = 0.02_01;
 
 my $build = Module::Build->new(
 	module_name => 'PDL::Fit::ExpRate',
-	dist_version => $version,
+	dist_version_from => 'lib/PDL/Fit/ExpRate.pm.PL',
 	license  => 'perl',
 	configure_requires => {
 		# meta_merge was added in v 0.28:
