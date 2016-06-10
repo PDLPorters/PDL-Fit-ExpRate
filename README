@@ -1,0 +1,26 @@
+PDL::Fit::ExpRate
+
+DESCRIPTION
+
+This distribution includes two modules. The primary module is
+PDL::Fit::ExpRate, which provides a PDL method for fitting the
+parameters to a noisy exponential decay. The implementation of that
+function includes lots of other smaller functions, and most of these
+are also wrapped into PDL methods and provided by this module.
+
+A secondary module is PDL::PP::Include::Fit::ExpRate. The exponential
+fitting code provided by PDL::Fit::ExpRate is implemented with normal C
+functions, and this module tries to make it as easy as possible for you
+to use those C functions in your own PDL code.
+
+INSTALLATION
+
+To install this module, you will need Module::Build and PDL already
+installed. Once you have those, use the normal Module::Build incantation,
+which is
+
+   *nix/Mac            Windows
+ perl Build.PL      perl Build.PL
+ ./Build            Build
+ ./Build test       Build test
+ ./Build install    Build install
