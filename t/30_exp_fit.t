@@ -14,6 +14,15 @@ my ($As, $Bs, $taus) = fit_exp_rate($xs, $ys
 	, threshold => 0.00001
 	, iterations => 200
 	, trust_radius => 0.1
+#	, run_each_iteration => sub {
+#		my %info = @_;
+#		return if $info{round} % 5 != 0;
+#		print "Round $info{round}:\n";
+#		delete $info{round};
+#		for my $k (sort keys %info) {
+#			print "  $k: $info{$k}\n";
+#		}
+#	},
 );
 my $expected = pdl(150, 10, -10);
 my $coefs = cat($As, $Bs, $taus)->flat;
@@ -40,6 +49,15 @@ $ys = 150 + 10 * exp($xs / $tau) + $xs->grandom*0.001;
 	, threshold => 0.0001
 	, iterations => 400
 	, trust_radius => 0.1,
+#	, run_each_iteration => sub {
+#		my %info = @_;
+#		return if $info{round} % 5 != 0;
+#		print "Round $info{round}:\n";
+#		delete $info{round};
+#		for my $k (sort keys %info) {
+#			print "  $k: $info{$k}\n";
+#		}
+#	},
 );
 $coefs = cat($As, $Bs, $taus)->flat;
 if (0 == $coefs->nbad) {
@@ -63,8 +81,17 @@ else {
 $ys = 150 + 10 * exp($xs / $tau);
 ($As, $Bs, $taus) = fit_exp_rate($xs, $ys
 	, threshold => 0.0001
-	, iterations => 20
-	, trust_radius => 0.01
+	, iterations => 400
+	, trust_radius => 0.1
+#	, run_each_iteration => sub {
+#		my %info = @_;
+#		return if $info{round} % 5 != 0;
+#		print "Round $info{round}:\n";
+#		delete $info{round};
+#		for my $k (sort keys %info) {
+#			print "  $k: $info{$k}\n";
+#		}
+#	},
 );
 $coefs = cat($As, $Bs, $taus)->flat;
 $expected = pdl(150, 10, $tau);

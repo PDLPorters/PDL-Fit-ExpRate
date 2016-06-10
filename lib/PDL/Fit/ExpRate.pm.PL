@@ -99,6 +99,9 @@ L<PDL::PP::Include::Fit::ExpRate>.
 
 DOCUMENTATION
 
+# Needed for epsilon
+pp_addhdr("#include <float.h>\n");
+
 =head2 FUNCTIONS
 
 =cut
@@ -818,6 +821,15 @@ pp_def('fit_exp_rate',
 		SV ** threshold_p = hv_fetchs(options_hv, "threshold", 0);
 		double threshold = threshold_p ? SvNV(*threshold_p) : 0.001;
 		
+		/* If the sum of the squared error drops below this, we're at the
+		 * level of bitnoise, so we'll declare victory (convergence). */
+		double minimum_calculable_sum_sq_error
+			= $SIZE(n)*$SIZE(n) * DBL_EPSILON * DBL_EPSILON;
+		/* This value was determined semi-empirically. I feel like the
+		 * factor of n**2 should just be n, and I should have a fudge
+		 * factor, but the fudge factor seemed to scale with the system
+		 * size so it just became n**2. */
+		
 		/**************/
 		/* Threadloop */
 		/**************/
@@ -839,6 +851,7 @@ pp_def('fit_exp_rate',
 			
 			while(
 				force_next_round || 
+				sum_sq_error > minimum_calculable_sum_sq_error &&
 				fabs(old_sum_sq_error - sum_sq_error) > old_sum_sq_error * threshold
 			) {
 				counter++;
