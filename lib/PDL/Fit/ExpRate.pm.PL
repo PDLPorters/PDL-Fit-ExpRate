@@ -371,23 +371,6 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 			total_sq_err += err*err;
 		}
 		return total_sq_err;
-		
-		/*
-		 * Old Code replaced by the faster, simpler accumulator above
-		 * 
-		if (n_values == 1) {
-			double err = A + B * exp(lambda * xs[0]) - ys[0];
-			return err*err;
-		}
-		if (n_values == 2) {
-			double first_err = A + B * exp(lambda * xs[0]) - ys[0];
-			double second_err = A + B * exp(lambda * xs[1]) - ys[1];
-			return first_err*first_err + second_err*second_err;
-		}
-		int half = n_values/2;
-		return accum_exp_fit_sum_sq_err(xs, ys, half, A, B, lambda)
-			+ accum_exp_fit_sum_sq_err(xs + half, ys + half, n_values - half, A, B, lambda);
-		*/
 	}
 	
 	void _exp_fit_estimate_parameters(
@@ -441,7 +424,7 @@ pp_addhdr pp_line_numbers(__LINE__, q{
 		/* Output variables */
 		double * A, double * B, double * lambda, double * sum_sq_error
 	) {
-		double Hessian[3][3], neg_gradient[3], coefs[3], step[3], residual;
+		double Hessian[3][3], neg_gradient[3], coefs[3], step[3];
 		int i;
 		
 		/**********************/
@@ -682,7 +665,7 @@ pp_def('fit_exp_rate',
 	Code => pp_line_numbers(__LINE__, q{
 		
 		double step[3];
-		double A, B, lambda, old_sum_sq_error, sum_sq_error, residual;
+		double A, B, lambda, old_sum_sq_error, sum_sq_error;
 		
 		/* If we take a guarded step, then we force the next round. This is so
 		 * that the fit won't erroneously think it's converged just because the
@@ -700,12 +683,11 @@ pp_def('fit_exp_rate',
 		SV ** per_iteration_code_ref_p = hv_fetchs(options_hv, "run_each_iteration", 0);
 		int callback_return;
 		
-		/* Minimum lambda before 'failing' */
+		/* Minimum lambda before failing */
 		SV ** min_lambda_p = hv_fetchs(options_hv, "min_lambda", 0);
 		double min_lambda = min_lambda_p ? SvNV(*min_lambda_p) : 1e-8;
 		
-		/* Maximum lambda for the initial estimate; value 0 means any
-		 * value is allowed */
+		/* Maximum lambda before failing; value 0 means any value is allowed */
 		SV ** max_lambda_p = hv_fetchs(options_hv, "max_lambda", 0);
 		double max_lambda = max_lambda_p ? SvNV(*max_lambda_p) : 0;
 		
@@ -783,7 +765,7 @@ pp_def('fit_exp_rate',
 			if (per_fit_code_ref_p != NULL) DO_FIT_CALLBACK;
 		%}
 	
-	QUIT: residual++;
+	QUIT: ;
 	
 	}),
 );
